@@ -6,9 +6,9 @@ class Struct:
     def __init__(self, **entries):
         for k, v in entries.items():
             if isinstance(k, (list, tuple)):
-                setattr(self, k, [Struct(x) if isinstance(x, dict) else x for x in v])
+                setattr(self, k, [Struct(**x) if isinstance(x, dict) else x for x in v])
             else:
-                setattr(self, k, Struct(v) if isinstance(v, dict) else v)
+                setattr(self, k, Struct(**v) if isinstance(v, dict) else v)
 
 
 def load_yaml(path):
