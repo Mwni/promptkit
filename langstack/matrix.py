@@ -1,17 +1,26 @@
+import json
 
 
 class AgentContainer:
-	def save(self):
-		return {
-			'agent': self.agent.get_save_state() if self.agent else None,
-			'chat_history': messages_to_dict(self.chat_history),
-			'request_log': self.request_log
-		}
+	def create_resumed_agent(self, state):
+		agent = self.matrix.get_agent(state['class'])(matrix=self.matrix, **state['attrs'])
+
+		for key, value in state['attrs'].items():
+				setattr(agent, key, value)
+
+		agent.resume(state)
+
+		return agent
+
 
 	def resume(self, state):
-		self.agent = agent_map[state['agent']['class']].from_save_state(self, state['agent'])
-		self.chat_history = messages_from_dict(state['chat_history'])
-		self.request_log = state['request_log']
+		for key, value in state['agents'].items():
+			if isinstance(value, list):
+				setattr(self, key, [self.create_resumed_agent(state) for state in value])
+			else:
+				setattr(self, key, self.create_resumed_agent(value))
+				
+
 
 
 class Matrix(AgentContainer):
@@ -19,6 +28,7 @@ class Matrix(AgentContainer):
 		self.agents = []
 		self.llms = []
 		self.state_handler = None
+		self.matrix = self
 
 	def register_agent(self, cls):
 		self.agents.append(cls)
@@ -41,4 +51,12 @@ class Matrix(AgentContainer):
 			self.state_handler()
 
 	def save(self):
-		pass
+		return {
+			'agents': {
+				'agent': self.agent.save()
+			}
+		}
+
+	def resume(self, state):
+		super().resume(state)
+		self.agent.step()

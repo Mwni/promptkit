@@ -14,7 +14,7 @@ class Agent(AgentContainer):
 		return agent
 
 
-	def __init__(self, matrix):
+	def __init__(self, matrix, **inputs):
 		self.matrix = matrix
 		self.transscript = []
 		self.request_log = []
@@ -56,7 +56,6 @@ class Agent(AgentContainer):
 	def user_reply(self, message):
 		message = UserMessage(text=message if type(message) == str else message.text)
 		self.transscript.append(message)
-		self.step()
 
 
 	def generate_response(self):
@@ -64,7 +63,7 @@ class Agent(AgentContainer):
 			messages=self.transscript, 
 			system_message=self.system_message
 		)
-		self.transscript.append(AssistantMessage(text=response))
+		self.transscript.append(response)
 
 
 	def next_stage(self, stage):
@@ -103,14 +102,25 @@ class Agent(AgentContainer):
 
 
 	def save(self):
-		state = {}
+		agents = {}
+		attrs = {}
 
-		
+		for key, value in vars(self).items():
+			if key in ('matrix', 'log', 'transscript'):
+				continue
+
+			if isinstance(value, Agent):
+				agents[key] = value.save()
+			elif isinstance(value, (tuple, list)) and len(value) > 0 and isinstance(value[0], Agent):
+				agents[key] = [agent.save() for agent in value]
+			else:
+				attrs[key] = value
 
 		return {
-			'type': 'agent',
 			'class': self.__class__.__name__,
-			'state': state
+			'transscript': [m.__dict__ for m in self.transscript],
+			'agents': agents,
+			'attrs': attrs,
 		}
 		
 
