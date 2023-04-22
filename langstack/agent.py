@@ -1,10 +1,11 @@
 from time import time
+from .matrix import AgentContainer
 from .messages import SystemMessage, AssistantMessage, UserMessage
 from .log import make_logger
 
 
 
-class Agent:
+class Agent(AgentContainer):
 	@classmethod
 	def from_save_state(cls, assistant, state):
 		agent = cls(assistant, start_index=state['start_index'])
@@ -17,8 +18,64 @@ class Agent:
 		self.matrix = matrix
 		self.transscript = []
 		self.request_log = []
-		self.stage = 'init'
+		self.system_message = None
+		self.stage = None
+		self.stage_entered = False
 		self.log = make_logger(self.__class__.__name__)
+		
+
+
+	def step(self):
+		if not self.stage_entered:
+			self.stage_entered = True
+			init_func_key = 'enter_%s' % self.stage if self.stage else 'enter'
+
+			if hasattr(self, init_func_key):
+				getattr(self, init_func_key)()
+
+		else:
+			getattr(self, 'step_%s' % self.stage if self.stage else 'step')()
+
+		self.matrix.state_change()
+		self.step()
+
+		
+
+
+	def set_system_message(self, message):
+		self.system_message = message
+
+
+	def emit_message(self, message):
+		if type(message) == str:
+			message = AssistantMessage(text=message)
+
+		self.transscript.append(message)
+
+
+	def user_reply(self, message):
+		message = UserMessage(text=message if type(message) == str else message.text)
+		self.transscript.append(message)
+		self.step()
+
+
+	def generate_response(self):
+		response = self.query_llm(
+			messages=self.transscript, 
+			system_message=self.system_message
+		)
+		self.transscript.append(AssistantMessage(text=response))
+
+
+	def next_stage(self, stage):
+		self.stage = stage
+		self.stage_entered = False
+
+
+	def spawn_agent(self, name, **inputs):
+		agent = self.matrix.get_agent(name)(matrix=self.matrix, **inputs)
+		return agent
+
 
 	def query_llm(self, messages, system_message=None):
 		llm = self.matrix.llms[0]
@@ -31,6 +88,7 @@ class Agent:
 		if system_message:
 			messages = [SystemMessage(text=system_message), *messages]
 
+		messages = [{'role': m.role, 'content': m.text} for m in messages]
 		output = llm(messages=messages)
 
 		self.request_log.append({
@@ -42,31 +100,21 @@ class Agent:
 		self.log.info('got response of %i chars' % len(output))
 
 		return AssistantMessage(text=output)
-		
-
-	def step(self):
-		getattr(self, 'reply_%s' % self.stage)()
 
 
-	def emit_message(self, message):
-		self.assistant.assistant_reply(message)
-
-
-	def get_messages(self, offset=0):
-		return self.assistant.chat_history[self.start_index+offset:]
-
-
-	def get_last_message(self):
-		return self.assistant.chat_history[-1]
-
-	def next_stage(self, stage):
-		self.stage = stage
-		init_func_key = 'enter_%s' % stage
-
-		if hasattr(self, init_func_key):
-			getattr(self, init_func_key)()
+	def save(self):
+		state = {}
 
 		
+
+		return {
+			'type': 'agent',
+			'class': self.__class__.__name__,
+			'state': state
+		}
+		
+
+	'''
 	def generate_chat(self, system_message, chat_history):
 		return self.assistant.query_chat_model(
 			[
@@ -138,9 +186,4 @@ class Agent:
 
 		return parser.parse(output)
 
-	def get_save_state(self):
-		return {
-			'class': self.__class__.class_id,
-			'start_index': self.start_index,
-			'stage': self.stage
-		}
+	'''

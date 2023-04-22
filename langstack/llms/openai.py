@@ -1,7 +1,6 @@
 import requests
 import json
 
-
 class OpenAIChat:
 	def __init__(self, api_key, model='gpt-3.5-turbo', **config):
 		self.api_key = api_key
@@ -15,9 +14,9 @@ class OpenAIChat:
 			headers={
 				'Content-Type': 'application/json',
 				'Authorization': 'Bearer %s' % self.api_key
-			}, 
+			},
 			data=json.dumps({
-				'messages': [{'role': m.role, 'content': m.text} for m in messages], 
+				'messages': messages, 
 				'model': self.model,
 				**self.config
 			})
@@ -26,7 +25,7 @@ class OpenAIChat:
 		data = json.loads(r.text)
 
 		try:
-			return data['choices'][0]['message']['content'].strip()
+			return data['choices'][0]['message']['content']
 		except:
 			if 'error' in data:
 				raise Exception(data['error']['message'])
