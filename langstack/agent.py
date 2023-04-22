@@ -6,14 +6,6 @@ from .log import make_logger
 
 
 class Agent(AgentContainer):
-	@classmethod
-	def from_save_state(cls, assistant, state):
-		agent = cls(assistant, start_index=state['start_index'])
-		agent.stage = state['stage']
-
-		return agent
-
-
 	def __init__(self, matrix, **inputs):
 		self.matrix = matrix
 		self.transscript = []
@@ -32,12 +24,8 @@ class Agent(AgentContainer):
 
 			if hasattr(self, init_func_key):
 				getattr(self, init_func_key)()
-
 		else:
 			getattr(self, 'step_%s' % self.stage if self.stage else 'step')()
-
-		self.matrix.state_change()
-		self.step()
 
 		
 

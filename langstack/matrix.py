@@ -1,4 +1,5 @@
 import json
+from .messages import dict_to_message
 
 
 class AgentContainer:
@@ -8,6 +9,7 @@ class AgentContainer:
 		for key, value in state['attrs'].items():
 				setattr(agent, key, value)
 
+		agent.transscript = [dict_to_message(m) for m in state['transscript']]
 		agent.resume(state)
 
 		return agent
@@ -27,7 +29,6 @@ class Matrix(AgentContainer):
 	def __init__(self):
 		self.agents = []
 		self.llms = []
-		self.state_handler = None
 		self.matrix = self
 
 	def register_agent(self, cls):
@@ -36,19 +37,14 @@ class Matrix(AgentContainer):
 	def register_llm(self, llm):
 		self.llms.append(llm)
 
-	def register_state_handler(self, handler):
-		self.state_handler = handler
-
 	def init(self, **inputs):
 		self.agent = self.agents[0](**inputs, matrix=self)
+		
+	def step(self):
 		self.agent.step()
 
 	def get_agent(self, name):
 		return next(agent for agent in self.agents if agent.__name__ == name)
-
-	def state_change(self):
-		if self.state_handler:
-			self.state_handler()
 
 	def save(self):
 		return {

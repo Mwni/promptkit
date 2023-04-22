@@ -14,6 +14,15 @@ class UserMessage:
 		self.text = text
 
 
+def dict_to_message(dict):
+	if dict['role'] == 'system':
+		return SystemMessage(text=dict['text'])
+	elif dict['role'] == 'assistant':
+		return AssistantMessage(text=dict['text'])
+	elif dict['role'] == 'user':
+		return UserMessage(text=dict['text'])
+
+
 def invert_roles(messages):
 	inverted_messages = []
 
