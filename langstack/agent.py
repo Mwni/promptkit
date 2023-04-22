@@ -13,11 +13,15 @@ class Agent(AgentContainer):
 		self.system_message = None
 		self.stage = None
 		self.stage_entered = False
+		self.terminated = False
 		self.log = make_logger(self.__class__.__name__)
 		
 
 
 	def step(self):
+		if self.terminated:
+			return
+
 		if not self.stage_entered:
 			self.stage_entered = True
 			init_func_key = 'enter_%s' % self.stage if self.stage else 'enter'
@@ -57,6 +61,10 @@ class Agent(AgentContainer):
 	def next_stage(self, stage):
 		self.stage = stage
 		self.stage_entered = False
+
+
+	def terminate(self):
+		self.terminated = True
 
 
 	def spawn_agent(self, name, **inputs):
