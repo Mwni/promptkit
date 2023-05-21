@@ -1,29 +1,72 @@
+import os
+import inspect
+from importlib import import_module, util as import_util
 from time import time
-from .matrix import AgentContainer
-from .messages import SystemMessage, AssistantMessage, UserMessage
+from .messages import SystemMessage, AssistantMessage, UserMessage 
+from .messages import dict_to_message
 from .log import make_logger
 
 
 
-class Agent(AgentContainer):
-	def __init__(self, matrix, **inputs):
-		self.matrix = matrix
+class Agent:
+	@staticmethod
+	def load_agent(file, cls):
+		spec = import_util.spec_from_file_location('agents.%s' % os.path.basename(file)[0:-3], file)
+		module = import_util.module_from_spec(spec)
+		spec.loader.exec_module(module)
+		return getattr(module, cls)
+
+	@classmethod
+	def resume(cls, state, parent=None):
+		agent = cls(parent=parent, **state['attrs'])
+		agent.transscript = [dict_to_message(m) for m in state['transscript']]
+
+		for key, value in state['attrs'].items():
+				setattr(agent, key, value)
+
+		for key, value in state['agents'].items():
+			if isinstance(value, list):
+				setattr(agent, key, [cls.load_agent(state['file'], state['class']).resume(state, agent) for state in value])
+			else:
+				setattr(agent, key, cls.load_agent(value['file'], value['class']).resume(value, agent))
+
+		return agent
+
+
+	
+
+	def __init__(self, parent=None, **inputs):
+		self.parent = parent
 		self.transscript = []
+		self.llms = []
 		self.request_log = []
 		self.system_message = None
 		self.stage = None
 		self.stage_entered = False
+		self.running_agents = None
 		self.terminated = False
 		self.log = make_logger(self.__class__.__name__)
-		
 
 
 	def step(self):
 		if self.terminated:
 			return
+		
+		if self.running_agents:
+			all_done = True
+
+			for i, agent in enumerate(self.running_agents):
+				if not agent.final_result:
+					agent.step()
+					all_done = False
+
+			
+
+
 
 		if not self.stage_entered:
 			self.stage_entered = True
+
 			init_func_key = 'enter_%s' % self.stage if self.stage else 'enter'
 
 			if hasattr(self, init_func_key):
@@ -32,6 +75,11 @@ class Agent(AgentContainer):
 			getattr(self, 'step_%s' % self.stage if self.stage else 'step')()
 
 		
+	def use_llm(self, llm):
+		self.llms.append(llm)
+
+	def run_agents(self, agents):
+		self.running_agents = [agents]
 
 
 	def set_system_message(self, message):
@@ -67,13 +115,20 @@ class Agent(AgentContainer):
 		self.terminated = True
 
 
-	def spawn_agent(self, name, **inputs):
-		agent = self.matrix.get_agent(name)(matrix=self.matrix, **inputs)
-		return agent
-
-
 	def query_llm(self, messages, system_message=None):
-		llm = self.matrix.llms[0]
+		if len(self.llms) > 0:
+			llms = self.llms
+		else:
+			parent = self.parent
+
+			while parent:
+				if len(parent.llms) > 0:
+					llms = parent.llms
+					break
+
+				parent = parent.parent
+
+		llm = llms[0]
 
 		self.log.info('querying %s' % llm.model)
 
@@ -102,7 +157,10 @@ class Agent(AgentContainer):
 		attrs = {}
 
 		for key, value in vars(self).items():
-			if key in ('matrix', 'log', 'transscript'):
+			if key in ('parent', 'llms', 'log', 'transscript'):
+				continue
+
+			if hasattr(self, 'save_skip') and key in self.save_skip:
 				continue
 
 			if isinstance(value, Agent):
@@ -114,11 +172,13 @@ class Agent(AgentContainer):
 
 		return {
 			'class': self.__class__.__name__,
+			'file': inspect.getfile(self.__class__),
 			'transscript': [m.__dict__ for m in self.transscript],
 			'agents': agents,
 			'attrs': attrs,
 		}
-		
+
+	
 
 	'''
 	def generate_chat(self, system_message, chat_history):
