@@ -18,3 +18,6 @@ class Conversation:
 		)
 		self.messages.append(response)
 		return response
+	
+	def __getitem__(self, index):
+		return self.messages[index]
