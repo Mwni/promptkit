@@ -1,3 +1,4 @@
+import os
 import threading
 import inspect
 import time
@@ -49,7 +50,7 @@ class Context:
 
 	
 	def dispatch_step(self):
-		time.sleep(0.1)
+		time.sleep(0.01)
 		self.step_event.set()
 		self.step_event.clear()
 		self.step_continue.wait()
@@ -59,7 +60,7 @@ class Context:
 		def wrapped_call(messages):
 			stack = inspect.stack()[1:]
 			result, set_result = self.journal.llm_result(key, stack, messages)
-			log = make_logger(stack[0].function)
+			log = make_logger(find_first_nonlib_call(stack).function)
 
 			if not result:
 				log.info('querying %s' % llm.model)
@@ -139,3 +140,11 @@ class Journal:
 			'file': self.file,
 			'cache': self.cache
 		}
+	
+
+def find_first_nonlib_call(stack):
+	for call in stack:
+		if os.path.dirname(__file__) in call.filename:
+			continue
+
+		return call
