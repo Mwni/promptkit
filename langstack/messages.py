@@ -14,6 +14,9 @@ class UserMessage:
 		self.text = text
 
 
+def message_to_dict(message):
+	return {'role': message.role, 'text': message.text}
+
 def dict_to_message(dict):
 	if dict['role'] == 'system':
 		return SystemMessage(text=dict['text'])

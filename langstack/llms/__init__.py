@@ -1,1 +1,1 @@
-from .openai import OpenAIChat
+from .openai import OpenAIChat, OpenAIChatTest
