@@ -1,3 +1,4 @@
+from copy import deepcopy
 from .messages import SystemMessage
 
 
@@ -19,5 +20,12 @@ class Conversation:
 		self.messages.append(response)
 		return response
 	
+	def clone(self):
+		return deepcopy(self)
+	
 	def __getitem__(self, index):
 		return self.messages[index]
+	
+	@property
+	def last(self):
+		return self.messages[-1]
