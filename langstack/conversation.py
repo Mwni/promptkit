@@ -20,6 +20,17 @@ class Conversation:
 		self.messages.append(response)
 		return response
 	
+	def to_plaintext(messages, names={'user': 'User', 'assistant': 'Assistant'}):
+		return '%s%s' % (
+			'%s\n\n' % messages[0]['text']
+			if messages[0]['role'] == 'system'
+			else '',
+			'\n\n'.join([
+				'%s: %s' % (names[m['role'], m['text']])
+				for m in messages
+			])
+		)
+	
 	def clone(self):
 		return deepcopy(self)
 	

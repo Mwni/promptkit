@@ -1,7 +1,6 @@
 import os
 import yaml
 import inspect
-from langchain.schema import HumanMessage
 
 
 class Struct:
@@ -20,10 +19,3 @@ def load_yaml(path):
 
 	with open(path) as f:
 		return Struct(**yaml.safe_load(f))
-
-
-def make_plaintext_transscript(messages):
-	return '\n\n'.join([
-		('Client: %s' if isinstance(m, HumanMessage) else 'Assistant: %s') % m.content
-		for m in messages
-	])
