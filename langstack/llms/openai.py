@@ -10,7 +10,7 @@ class OpenAIChat(BaseLLM):
 		self.config = config
 
 
-	def __call__(self, messages):
+	def __call__(self, messages, **config):
 		r = requests.post(
 			'https://api.openai.com/v1/chat/completions' , 
 			headers={
@@ -20,7 +20,8 @@ class OpenAIChat(BaseLLM):
 			data=json.dumps({
 				'messages': [{'role': m.role, 'content': m.text} for m in messages], 
 				'model': self.model,
-				**self.config
+				**self.config,
+				**config
 			})
 		)
 
