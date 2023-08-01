@@ -6,6 +6,8 @@ from .log import make_logger
 from .llms.base import BaseLLM
 from .journal import Journal
 
+log = make_logger('langstack')
+
 
 def execute(fn, journal=None, **kwargs):
 	ctx = Context(fn, journal)
@@ -21,12 +23,11 @@ class Context:
 		self.step_continue = threading.Event()
 		self.result = None
 		self.finished = False
-		self.journal = Journal(function=fn.__name__, file=inspect.getfile(fn)) if not journal else Journal.from_dict(journal)
-		self.log = make_logger('langstack')
+		self.journal = Journal(function=fn.__name__, file=inspect.getfile(fn)) if not journal else journal
 
 
 	def execute(self, kwargs):
-		self.log.info('executing %s' % self.fn.__name__)
+		log.info('executing %s' % self.fn.__name__)
 
 		for key, value in kwargs.items():
 			if isinstance(value, BaseLLM):
