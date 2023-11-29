@@ -1,12 +1,12 @@
 from setuptools import setup
 
 setup(
-	name='langstack',
+	name='promptkit',
 	version='1.0',
 	packages=[
-		'langstack',
-		'langstack.llms',
-		'langstack.parsers',
+		'promptkit',
+		'promptkit.llms',
+		'promptkit.parsers',
 	],
 	install_requires=[]
 )
