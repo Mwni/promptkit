@@ -9,6 +9,7 @@ class Inlet:
 		if self.item:
 			raise Exception('cannot set inlet item twice')
 		
+		self.awaiting = False
 		self.item = item
 		self.item_event.set()
 
