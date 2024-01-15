@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
 	name='promptkit',
-	version='1.0',
+	version='2.0',
 	packages=[
 		'promptkit',
 		'promptkit.llms',
