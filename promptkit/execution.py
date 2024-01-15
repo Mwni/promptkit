@@ -8,7 +8,7 @@ from .llms.base import BaseLLM
 from .io import Inlet, Outlet
 from .journal import Journal
 
-log = make_logger('langstack')
+log = make_logger('promptkit')
 
 
 def execute(fn, journal=None, **kwargs):
@@ -78,15 +78,15 @@ class Context:
 		def wrapped_call(messages):
 			stack = inspect.stack()[1:]
 			result, set_result = self.journal.advance('llm', key, stack, messages)
-			log = make_logger(find_first_nonlib_call(stack).function)
+			log_name = find_first_nonlib_call(stack).function
 
 			if not result:
-				log.info('querying %s' % llm.model)
+				log.info('%s: querying %s' % (log_name, llm.model))
 				result = llm(messages)
-				log.info('got result of length %i' % len(result.text))
+				log.info('%s: got result of length %i' % (log_name, len(result.text)))
 				set_result(result)
 			else:
-				log.info('replayed %s query with length of %i' % (llm.model, len(result.text)))
+				log.info('%s: replayed %s query with length of %i' % (log_name, llm.model, len(result.text)))
 
 			self.dispatch_step()
 			return result
@@ -112,10 +112,10 @@ class Context:
 			def __next__(_):
 				stack = inspect.stack()[1:]
 				item, set_item = self.journal.advance('inlet', key, stack)
-				log = make_logger(find_first_nonlib_call(stack).function)
+				log_name = find_first_nonlib_call(stack).function
 
 				if not item:
-					log.info('awaiting inlet item for "%s"' % key)
+					log.info('%s: awaiting inlet item for "%s"' % (log_name, key))
 					inlet.awaiting = True
 					self.dispatch_step()
 					inlet.item_event.wait()
@@ -124,7 +124,7 @@ class Context:
 					inlet.item = None
 					set_item(item)
 				else:
-					log.info('replayed inlet item for "%s"' % key)
+					log.info('%s: replayed inlet item for "%s"' % (log_name, key))
 
 				self.dispatch_step()
 				return item

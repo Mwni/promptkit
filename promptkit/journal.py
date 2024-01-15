@@ -1,7 +1,7 @@
 from .messages import message_to_dict, dict_to_message
 from .log import make_logger
 
-log = make_logger('langstack')
+log = make_logger('promptkit')
 
 
 class Journal:
