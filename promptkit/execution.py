@@ -2,8 +2,10 @@ import os
 import threading
 import inspect
 import time
+from queue import Queue
 from .log import make_logger
 from .llms.base import BaseLLM
+from .io import Inlet, Outlet
 from .journal import Journal
 
 log = make_logger('langstack')
@@ -19,8 +21,10 @@ def execute(fn, journal=None, **kwargs):
 class Context:
 	def __init__(self, fn, journal):
 		self.fn = fn
-		self.step_event = threading.Event()
+		self.step_complete = threading.Event()
 		self.step_continue = threading.Event()
+		self.inlets = []
+		self.outlets = []
 		self.result = None
 		self.finished = False
 		self.journal = Journal(function=fn.__name__, file=inspect.getfile(fn)) if not journal else journal
@@ -32,8 +36,14 @@ class Context:
 		for key, value in kwargs.items():
 			if isinstance(value, BaseLLM):
 				kwargs[key] = self.wrap_llm(value, key)
+			elif isinstance(value, Inlet):
+				kwargs[key] = self.wrap_inlet(value, key)
+			elif isinstance(value, Outlet):
+				kwargs[key] = self.wrap_outlet(value, key)
 
 		def exec():
+			self.step_continue.wait()
+			self.step_continue.clear()
 			self.result = self.fn(**kwargs)
 			self.finished = True
 			self.dispatch_step()
@@ -44,17 +54,29 @@ class Context:
 
 
 	def step(self):
-		self.step_event.wait()
+		inlets_waiting = [inlet for inlet in self.inlets if inlet.awaiting]
+		outlets_filled = [outlet for outlet in self.outlets if not outlet.empty]
+
+		if len(inlets_waiting) > 0:
+			raise Exception('cannot step - inlets awaiting input: %s' % ', '.join([inlet.key for inlet in inlets_waiting]))
+		
+		if len(outlets_filled) > 0:
+			raise Exception('cannot step - outlets not fetched: %s' % ', '.join([outlet.key for outlet in outlets_filled]))
+
 		self.step_continue.set()
-		self.step_continue.clear()
-		return not self.finished
+		self.step_complete.wait()
+		self.step_complete.clear()
+		
+		no_inlets_waiting = all([not inlet.awaiting for inlet in self.inlets])
+		no_outlets_filled = all([outlet.empty for outlet in self.outlets])
+
+		return not self.finished and no_inlets_waiting and no_outlets_filled
 
 	
 	def dispatch_step(self):
-		time.sleep(0.01)
-		self.step_event.set()
-		self.step_event.clear()
+		self.step_complete.set()
 		self.step_continue.wait()
+		self.step_continue.clear()
 
 
 	def wrap_llm(self, llm, key):
@@ -76,6 +98,46 @@ class Context:
 		
 		return wrapped_call
 	
+
+	def wrap_inlet(self, inlet, key):
+		inlet.key = key
+		inlet.item_event = threading.Event()
+
+		class InletProvider:
+			def __init__(self):
+				self.made_iter = False
+
+			def __iter__(self):
+				if self.made_iter:
+					raise Exception('can only call iter on "%s" once' % key)
+				
+				self.made_iter = True
+				return self
+
+			def __next__(self):
+				stack = inspect.stack()[1:]
+				inlet.awaiting = True
+				inlet.item_event.wait()
+				inlet.item_event.clear()
+				item = inlet.item
+				inlet.item = None
+				return item
+		
+		return InletProvider()
+
+
+	def wrap_outlet(self, outlet, key):
+		outlet.key = key
+		outlet.queue = Queue()
+		self.outlets.append(outlet)
+
+		def put(item):
+			outlet.queue.put(item)
+			self.dispatch_step()
+
+		return put
+	
+
 
 def find_first_nonlib_call(stack):
 	for call in stack:
