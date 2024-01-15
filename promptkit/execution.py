@@ -55,22 +55,17 @@ class Context:
 
 	def step(self):
 		inlets_waiting = [inlet for inlet in self.inlets if inlet.awaiting]
-		outlets_filled = [outlet for outlet in self.outlets if not outlet.empty]
 
 		if len(inlets_waiting) > 0:
 			raise Exception('cannot step - inlets awaiting input: %s' % ', '.join([inlet.key for inlet in inlets_waiting]))
 		
-		if len(outlets_filled) > 0:
-			raise Exception('cannot step - outlets not fetched: %s' % ', '.join([outlet.key for outlet in outlets_filled]))
-
 		self.step_continue.set()
 		self.step_complete.wait()
 		self.step_complete.clear()
 		
 		no_inlets_waiting = all([not inlet.awaiting for inlet in self.inlets])
-		no_outlets_filled = all([outlet.empty for outlet in self.outlets])
 
-		return not self.finished and no_inlets_waiting and no_outlets_filled
+		return not self.finished and no_inlets_waiting
 
 	
 	def dispatch_step(self):
@@ -82,7 +77,7 @@ class Context:
 	def wrap_llm(self, llm, key):
 		def wrapped_call(messages):
 			stack = inspect.stack()[1:]
-			result, set_result = self.journal.llm_result(key, stack, messages)
+			result, set_result = self.journal.advance('llm', key, stack, messages)
 			log = make_logger(find_first_nonlib_call(stack).function)
 
 			if not result:
@@ -114,15 +109,28 @@ class Context:
 				self.made_iter = True
 				return self
 
-			def __next__(self):
+			def __next__(_):
 				stack = inspect.stack()[1:]
-				inlet.awaiting = True
-				inlet.item_event.wait()
-				inlet.item_event.clear()
-				item = inlet.item
-				inlet.item = None
+				item, set_item = self.journal.advance('inlet', key, stack)
+				log = make_logger(find_first_nonlib_call(stack).function)
+
+				if not item:
+					log.info('awaiting inlet item for "%s"' % key)
+					inlet.awaiting = True
+					self.dispatch_step()
+					inlet.item_event.wait()
+					inlet.item_event.clear()
+					item = inlet.item
+					inlet.item = None
+					set_item(item)
+				else:
+					log.info('replayed inlet item for "%s"' % key)
+
+				self.dispatch_step()
 				return item
-		
+			
+		self.inlets.append(inlet)
+			
 		return InletProvider()
 
 
@@ -133,7 +141,6 @@ class Context:
 
 		def put(item):
 			outlet.queue.put(item)
-			self.dispatch_step()
 
 		return put
 	
