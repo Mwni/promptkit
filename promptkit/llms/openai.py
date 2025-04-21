@@ -4,15 +4,16 @@ from ..messages import AssistantMessage
 from .base import BaseLLM
 
 class OpenAIChat(BaseLLM):
-	def __init__(self, api_key, model='gpt-3.5-turbo', **config):
+	def __init__(self, api_key, base_url='https://api.openai.com/v1/chat/completions', model='gpt-3.5-turbo', **config):
 		self.api_key = api_key
+		self.base_url = base_url
 		self.model = model
 		self.config = config
 
 
 	def __call__(self, messages, **config):
 		r = requests.post(
-			'https://api.openai.com/v1/chat/completions' , 
+			self.base_url, 
 			headers={
 				'Content-Type': 'application/json',
 				'Authorization': 'Bearer %s' % self.api_key
